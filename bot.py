@@ -1,5 +1,6 @@
 import logging
 import os
+import asyncio
 from datetime import time
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ChatMemberHandler
@@ -81,6 +82,12 @@ async def top_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text)
 
 def main():
+    # FIX lỗi Python 3.14 trên Render - tạo event loop mới
+    try:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    except Exception as e:
+        print(f"Event loop fix: {e}")
     print(f"Bot Token lay tu ENV: {BOT_TOKEN[:12]}...")
     app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start_command))
