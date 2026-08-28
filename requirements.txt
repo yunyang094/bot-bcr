@@ -1,2 +1,2 @@
-python-telegram-bot==20.7
-Pillow
+python-telegram-bot[job-queue]==22.3
+Pillow==10.4.0
