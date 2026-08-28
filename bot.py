@@ -28,12 +28,22 @@ def get_main_keyboard():
     return InlineKeyboardMarkup(keyboard)
 
 async def dang_bai_20h(context: ContextTypes.DEFAULT_TYPE):
-    text = "Bai cau toi 20h - My da khoanh chi tiet trong nhom rieng."
+    text = "Bai cau toi 20h - My da khoanh chi tiet trong nhom rieng. @all"
+    print(f"[JOB] Dang chay dang_bai_20h luc {context.job.next_t} - CHANNEL_ID={CHANNEL_ID}")
     try:
         msg = await context.bot.send_message(chat_id=CHANNEL_ID, text=text, reply_markup=get_main_keyboard())
-        await context.bot.pin_chat_message(chat_id=CHANNEL_ID, message_id=msg.message_id, disable_notification=True)
+        try:
+            await context.bot.pin_chat_message(chat_id=CHANNEL_ID, message_id=msg.message_id, disable_notification=True)
+        except:
+            pass
+        print(f"[JOB] Dang bai 20h thanh cong! Message ID: {msg.message_id}")
+        await context.bot.send_message(chat_id=ADMIN_ID, text=f"Da dang bai 20h thanh cong vao channel {CHANNEL_ID}")
     except Exception as e:
-        print(f"Loi dang bai: {e}")
+        print(f"Loi dang bai 20h: {e}")
+        try:
+            await context.bot.send_message(chat_id=ADMIN_ID, text=f"LOI dang bai 20h: {e} - CHANNEL_ID={CHANNEL_ID}. Bot co lam admin trong channel chua?")
+        except:
+            pass
 
 async def chao_thanh_vien_moi(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.chat_member.new_chat_member.status == ChatMemberStatus.MEMBER:
@@ -73,6 +83,13 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         my_ref_link = f"https://t.me/{context.bot.username}?start=ref_{user_id}"
         await update.message.reply_text(f"Link moi rieng cua ban:\n{my_ref_link}\nDiem: {invite_data.get(user_id, 0)}", reply_markup=get_main_keyboard())
 
+async def test_dang_bai_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
+    await update.message.reply_text("Dang test dang bai 20h...")
+    await dang_bai_20h(context)
+    await update.message.reply_text("Test xong! Kiem tra channel di My!")
+
 async def top_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not invite_data:
         await update.message.reply_text("Chua co ai moi!")
@@ -88,18 +105,28 @@ def main():
         asyncio.set_event_loop(loop)
     except Exception as e:
         print(f"Event loop fix: {e}")
-    print(f"Bot Token lay tu ENV: {BOT_TOKEN[:12]}...")
+    
+    print(f"Bot Token lay tu ENV: {BOT_TOKEN[:12]}... - Dang khoi dong...")
+    print("Luu y: Chi chay 1 noi thoi! Tat het bot o cho khac di nha My!")
+    
     app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("ban", ban_command))
     app.add_handler(CommandHandler("top", top_command))
+    app.add_handler(CommandHandler("testdangbai", test_dang_bai_command))
     app.add_handler(ChatMemberHandler(chao_thanh_vien_moi, ChatMemberHandler.CHAT_MEMBER))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, auto_reply_tu_dong))
     job = app.job_queue
     if job:
-        job.run_daily(dang_bai_20h, time=time(hour=13, minute=0))
-    print("Bot dang chay OK! - Da lay Token tu Environment")
-    app.run_polling(drop_pending_updates=True)
+        # 13:00 UTC = 20:00 Viet Nam (UTC+7)
+        job.run_daily(dang_bai_20h, time=time(hour=13, minute=0, second=0))
+        print("Da dat lich dang bai 20h Viet Nam (13:00 UTC) moi ngay")
+    
+    print("Bot dang chay OK! - Da lay Token tu Environment - Chong danh nhau: drop_pending_updates=True")
+    # drop_pending_updates=True de tranh danh nhau khi thoat ra thoat vo
+    # allowed_updates chi lay tin nhan moi
+    app.run_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES, close_loop=False)
 
 if __name__ == "__main__":
     main()
+
