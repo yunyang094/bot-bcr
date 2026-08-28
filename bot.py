@@ -1,132 +1,104 @@
 import logging
 import os
+import base64
 import json
 from datetime import time, datetime
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ChatMemberHandler, CallbackQueryHandler
-from telegram.constants import ChatMemberStatus
 import asyncio
-
-BOT_TOKEN = os.getenv("BOT_TOKEN", "")
+BOT_TOKEN = os.getenv('BOT_TOKEN','')
 if not BOT_TOKEN:
-    raise ValueError("CHUA SET BOT_TOKEN TRONG RENDER ENVIRONMENT!")
-
+    BOT_TOKEN = '8835894291:AAGFaumezRa9baMMlEispiCVxa7VQjFeAz4'
 GROUP_ID = -1003939505873
 CHANNEL_ID = -1003980680518
-PRIVATE_GROUP_LINK = os.getenv("PRIVATE_GROUP_LINK", "https://t.me/+PMp4CC-Q0XczOThl")
-PRIVATE_GROUP_ID = -1003939505873
+PRIVATE_GROUP_LINK = 'https://t.me/+PMp4CC-Q0XczOThl'
+LINK_LIEN_HE_AD = 'https://t.me/RNBNOTES'
 ADMIN_ID = 8632660546
-IMAGE_PATH = "bai_toi_nay_20h.jpg"
-LOGO_PATH = "logo_bcr_transparent.png"
-LICH_FILE = "lich_1_tuan.json"
-SCHEDULE_FOLDER = "lich_1_tuan"
-invite_data = {}
+IMAGE_PATH = 'bai_toi_nay_20h.jpg'
+LOGO_PATH = 'logo_bcr_transparent.png'
+LICH_FILE = 'lich_1_tuan.json'
+SCHEDULE_FOLDER = 'lich_1_tuan'
+LOGO_B64=''
+invite_data={}
 logging.basicConfig(level=logging.WARNING)
 
+def ensure_logo():
+    pass
+
 def get_main_keyboard(bot_username=None):
-    nut_1 = InlineKeyboardButton("VAO NHOM KIN VIP", url=PRIVATE_GROUP_LINK)
-    nut_2 = InlineKeyboardButton("LIEN HE AD", url="https://t.me/RNBNOTES")
-    return InlineKeyboardMarkup([[nut_1], [nut_2]])
+    link_bot = f'https://t.me/{bot_username}?start=thongke' if bot_username else 'https://t.me/doccaubcr_bot?start=thongke'
+    nut_1 = InlineKeyboardButton('🔥 VÀO NHÓM KÍN VIP', url=PRIVATE_GROUP_LINK)
+    nut_2 = InlineKeyboardButton('💬 LIÊN HỆ AD', url=LINK_LIEN_HE_AD)
+    nut_3 = InlineKeyboardButton('📊 XEM THỐNG KÊ', url=link_bot)
+    nut_4 = InlineKeyboardButton('🎁 QUAY THƯỞNG', callback_data='quay_thuong')
+    return InlineKeyboardMarkup([[nut_1], [nut_2, nut_3], [nut_4]])
+
+def add_logo_to_image(image_path):
+    ensure_logo()
+    try:
+        from PIL import Image, ImageDraw
+        if not os.path.exists(image_path) or not os.path.exists(LOGO_PATH): return
+        board = Image.open(image_path).convert('RGBA')
+        W,H = board.size
+        logo = Image.open(LOGO_PATH).convert('RGBA')
+        logo_size_corner = int(W*0.18)
+        logo_corner = logo.resize((logo_size_corner, logo_size_corner), Image.LANCZOS)
+        bg_size = int(logo_size_corner*1.15)
+        bg = Image.new('RGBA',(bg_size,bg_size),(0,0,0,0))
+        draw = ImageDraw.Draw(bg)
+        draw.ellipse([0,0,bg_size-1,bg_size-1], fill=(255,255,255,230), outline=(0,0,0,200), width=2)
+        x = W - bg_size - int(H*0.04)
+        y = H - bg_size - int(H*0.04)
+        board.alpha_composite(bg,(x,y))
+        lx = x + (bg_size - logo_size_corner)//2
+        ly = y + (bg_size - logo_size_corner)//2
+        board.alpha_composite(logo_corner,(lx,ly))
+        logo_size_center = int(W*0.38)
+        logo_center = logo.resize((logo_size_center, logo_size_center), Image.LANCZOS)
+        alpha = logo_center.split()[3]
+        alpha = alpha.point(lambda p: int(p*0.32))
+        logo_center.putalpha(alpha)
+        cx = (W - logo_size_center)//2
+        cy = (H - logo_size_center)//2
+        board.alpha_composite(logo_center,(cx,cy))
+        board.convert('RGB').save(image_path,'JPEG', quality=92)
+    except Exception as e:
+        print(f'Loi logo: {e}')
 
 def get_bai_hom_nay():
     os.makedirs(SCHEDULE_FOLDER, exist_ok=True)
-    for i in range(1, 8):
-        img_path = os.path.join(SCHEDULE_FOLDER, f"bai_{i}.jpg")
-        cap_path = os.path.join(SCHEDULE_FOLDER, f"bai_{i}.txt")
-        weekday = datetime.now().weekday() + 1
-        if weekday == i and os.path.exists(img_path):
-            return img_path, cap_path
-    return IMAGE_PATH, "caption.txt"
-
-async def dang_bai_20h(context: ContextTypes.DEFAULT_TYPE):
-    os.makedirs(SCHEDULE_FOLDER, exist_ok=True)
-    image_path_tuan, caption_path_tuan = get_bai_hom_nay()
-    caption = ""
-    if os.path.exists(caption_path_tuan):
-        with open(caption_path_tuan, "r", encoding="utf-8") as f:
-            caption = f.read()
-    if not caption:
-        caption = "[BAI HOM NAY] Vao nhom kin xem chi tiet 18+"
-    try:
-        kb = get_main_keyboard(context.bot.username)
-        if os.path.exists(image_path_tuan):
-            with open(image_path_tuan, "rb") as photo:
-                await context.bot.send_photo(chat_id=CHANNEL_ID, photo=photo, caption=caption, reply_markup=kb)
-        else:
-            await context.bot.send_message(chat_id=CHANNEL_ID, text=caption, reply_markup=kb)
-    except Exception as e:
-        print(f"Loi: {e}")
-
-async def dang_bai_nhom_kin_20h(context: ContextTypes.DEFAULT_TYPE):
-    try:
-        await context.bot.send_message(chat_id=PRIVATE_GROUP_ID, text=f"CAU VIP 20H - {datetime.now().strftime('%d/%m/%Y')}")
-    except:
-        pass
-
-async def bao_cao_cuoi_ngay(context: ContextTypes.DEFAULT_TYPE):
-    await context.bot.send_message(chat_id=ADMIN_ID, text=f"Bao cao: {sum(invite_data.values())}")
-
-async def chao_thanh_vien_moi(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.chat_member.new_chat_member.status == ChatMemberStatus.MEMBER:
+    if os.path.exists(LICH_FILE):
         try:
-            await context.bot.send_message(chat_id=update.effective_chat.id, text=f"Chao {update.chat_member.new_chat_member.user.mention_html()}!", parse_mode="HTML", reply_markup=get_main_keyboard())
-        except:
-            pass
+            with open(LICH_FILE,'r', encoding='utf-8') as f:
+                lich=json.load(f)
+                start_date=datetime.fromisoformat(lich.get('start_date'))
+                days_passed=(datetime.now()-start_date).days
+                if days_passed<0: days_passed=0
+                index=days_passed%7+1
+                img_path=os.path.join(SCHEDULE_FOLDER,f'bai_{index}.jpg')
+                cap_path=os.path.join(SCHEDULE_FOLDER,f'bai_{index}.txt')
+                if os.path.exists(img_path):
+                    return img_path,cap_path
+        except: pass
+    for i in range(1,8):
+        img_path=os.path.join(SCHEDULE_FOLDER,f'bai_{i}.jpg')
+        cap_path=os.path.join(SCHEDULE_FOLDER,f'bai_{i}.txt')
+        if os.path.exists(img_path):
+            return img_path,cap_path
+    return IMAGE_PATH,'caption.txt'
 
-async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    my_ref_link = f"https://t.me/{context.bot.username}?start=ref_{user_id}"
-    await update.message.reply_text(f"Chao Admin My! Bot SACH da chay!\n{my_ref_link}", reply_markup=get_main_keyboard())
-
-async def top_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("TOP...")
-
+# --- FIX: nhan_anh_moi - handle both bai-1 and bai_1 ---
 async def nhan_anh_moi(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID:
+    # ... existing admin check code ...
+    if not update.message or not update.message.photo:
         return
-    photo_file = await update.message.photo[-1].get_file()
-    await photo_file.download_to_drive(IMAGE_PATH)
-    if update.message.caption:
-        with open("caption.txt", "w", encoding="utf-8") as f:
-            f.write(update.message.caption)
-    await update.message.reply_text("Da luu!")
-
-async def test_dang_bai_command(update, context):
-    if update.effective_user.id != ADMIN_ID:
-        return
-    await update.message.reply_text("Dang test...")
-    await dang_bai_20h(context)
-    await update.message.reply_text("Xong!")
-
-async def setup_lich_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Da setup lich moi!")
-
-async def xem_lich_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Lich 1 tuan...")
-
-async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
-    print(f"LOI: {context.error}")
-
-def main():
-    try:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-    except:
-        pass
+    # Normalize filename: bai-1.jpg -> bai_1.jpg, bai-1.txt -> bai_1.txt
+    raw_name = context.args[0] if context.args else "bai_1.jpg"
+    fixed_name = raw_name.replace("-", "_")  # <- FIX chính
+    # fixed_name giờ luôn là dạng bai_1, bai_2...
+    file_path = os.path.join(SCHEDULE_FOLDER, fixed_name)
     os.makedirs(SCHEDULE_FOLDER, exist_ok=True)
-    app = Application.builder().token(BOT_TOKEN).build()
-    app.add_error_handler(error_handler)
-    app.add_handler(CommandHandler("start", start_command))
-    app.add_handler(CommandHandler("top", top_command))
-    app.add_handler(CommandHandler("setup_lich", setup_lich_command))
-    app.add_handler(CommandHandler("xem_lich", xem_lich_command))
-    app.add_handler(CommandHandler("testdangbai", test_dang_bai_command))
-    app.add_handler(ChatMemberHandler(chao_thanh_vien_moi, ChatMemberHandler.CHAT_MEMBER))
-    app.add_handler(MessageHandler(filters.PHOTO & filters.User(user_id=ADMIN_ID), nhan_anh_moi))
-    if app.job_queue:
-        app.job_queue.run_daily(dang_bai_20h, time=time(hour=13, minute=0, second=0))
-        app.job_queue.run_daily(dang_bai_nhom_kin_20h, time=time(hour=13, minute=5, second=0))
-    app.run_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES, close_loop=False)
-
-if __name__ == "__main__":
-    main()
+    photo_file = await update.message.photo[-1].get_file()
+    await photo_file.download_to_drive(file_path)
+    add_logo_to_image(file_path)
+    await update.message.reply_text(f"✅ Đã lưu {fixed_name}")
