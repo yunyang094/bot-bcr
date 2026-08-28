@@ -9,7 +9,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 from telegram.constants import ChatMemberStatus
 
 # ===== CẤU HÌNH - CHỈ CẦN SỬA Ở ĐÂY =====
-BOT_TOKEN = os.getenv("BOT_TOKEN", "8835894291:AAFCodSlwL8EWLPmmsLbIKROtYqd3qOHQC8")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8835894291:AAFtKmGci78dgWVXYNiudh9C8XR8KXXqbOc")
 GROUP_ID = -1003939505873  # Nhóm công khai cũ
 CHANNEL_ID = -1003980680518 # Kênh
 PRIVATE_GROUP_ID = -1003939505873  # NHÓM KÍN MỚI CỦA MY - My dán ID nhóm kín vào đây (lấy bằng @userinfobot)
