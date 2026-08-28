@@ -366,7 +366,7 @@ def main():
     os.makedirs(SCHEDULE_FOLDER, exist_ok=True)
     os.makedirs(VIP_FOLDER, exist_ok=True)
     # FIX QUÁNH NHAU: chỉ cho phép 1 con bot chạy thôi
-    app = Application.builder().token(BOT_TOKEN).build()
+    app = Application.builder().token(BOT_TOKEN).updater(None).build()
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("ban", ban_command))
     app.add_handler(CommandHandler("top", top_command))
