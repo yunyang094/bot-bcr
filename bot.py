@@ -8,9 +8,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 from telegram.constants import ChatMemberStatus
 import asyncio
 
-BOT_TOKEN = os.getenv("BOT_TOKEN", "")
-if not BOT_TOKEN:
-    BOT_TOKEN = "8835894291:AAGFaumezRa9baMMlEispiCVxa7VQjFeAz4"
+BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
 GROUP_ID = -1003939505873
 CHANNEL_ID = -1003980680518
 PRIVATE_GROUP_LINK = "https://t.me/+PMp4CC-Q0XczOThl"
