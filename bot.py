@@ -35,34 +35,21 @@ if os.path.exists(PREMIUM_FILE):
 def pe_by_id(eid, fallback=">"):
     return f'<tg-emoji emoji-id="{eid}">{fallback}</tg-emoji>'
 
-def pe(name, fallback=">"):
-    eid = PREMIUM_ICONS.get(name)
-    if eid:
-        return pe_by_id(eid, fallback)
-    if PREMIUM_ICONS:
-        any_id = list(PREMIUM_ICONS.values())[0]
-        return pe_by_id(any_id, fallback)
-    return fallback
-
 def save_premium():
     with open(PREMIUM_FILE, "w", encoding="utf-8") as f:
         json.dump(PREMIUM_ICONS, f, ensure_ascii=False, indent=2)
 
 def auto_premium_caption(text):
-    if not text:
-        return text
-    if not PREMIUM_ICONS:
+    if not text or not PREMIUM_ICONS:
         return text
     ids = list(PREMIUM_ICONS.values())
-    if len(ids) == 0:
-        return text
-    if "<tg-emoji" in text:
+    if "<tg-emoji" in text or len(ids)==0:
         return text
     first_id = ids[0]
     for k in ["@", "#", ">"]:
         if k in text:
             text = text.replace(k, pe_by_id(first_id, k))
-    if "<tg-emoji" not in text and len(ids) >= 1:
+    if "<tg-emoji" not in text:
         text = f"{pe_by_id(first_id, '✨')} {text} {pe_by_id(first_id, '✨')}"
     return text
 
@@ -74,7 +61,6 @@ def caption_to_html(message):
     entities = sorted(entities, key=lambda e: e.offset)
     result = ""
     last = 0
-    new_icons = 0
     for ent in entities:
         result += text[last:ent.offset]
         seg = text[ent.offset:ent.offset+ent.length]
@@ -83,94 +69,81 @@ def caption_to_html(message):
             if eid not in PREMIUM_ICONS.values():
                 key = "icon_" + str(len(PREMIUM_ICONS) + 1)
                 PREMIUM_ICONS[key] = eid
-                new_icons += 1
+                save_premium()
             result += pe_by_id(eid, seg)
         else:
             result += seg
         last = ent.offset + ent.length
     result += text[last:]
-    if new_icons > 0:
-        save_premium()
-        print(f"Da luu them {new_icons} icon moi!")
     return result
 
-# FIX: Cho phép tất cả user xem icon để test, không chặn ADMIN nữa
 async def bat_nhieu_icon(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
-    if not msg:
-        return
-    # Nếu không có entities custom emoji
-    if not msg.entities:
-        await msg.reply_text(f"My gui icon Premium di! Hien tai da co {len(PREMIUM_ICONS)} icon. Gui 10-20 icon 1 lan nha!")
+    if not msg or not msg.entities:
+        await msg.reply_text(f"Hien tai co {len(PREMIUM_ICONS)} icon. My gui 10 icon Premium 1 lan di!")
         return
     dem = 0
     for ent in msg.entities:
         if ent.type == MessageEntity.CUSTOM_EMOJI:
             if ent.custom_emoji_id not in PREMIUM_ICONS.values():
-                key = "icon_" + str(len(PREMIUM_ICONS) + 1)
+                key = f"icon_{len(PREMIUM_ICONS)+1}"
                 PREMIUM_ICONS[key] = ent.custom_emoji_id
                 dem += 1
     if dem:
         save_premium()
-        await msg.reply_text(f"Da luu {dem} icon moi! Tong {len(PREMIUM_ICONS)} icon - Gio dang bai se lap lanh!", parse_mode="HTML")
-        if PREMIUM_ICONS:
-            first_id = list(PREMIUM_ICONS.values())[0]
-            await msg.reply_text(f"Test icon: {pe_by_id(first_id, 'TEST')} Lap lanh chua My?", parse_mode="HTML")
+        await msg.reply_text(f"Da luu {dem} icon moi! Tong {len(PREMIUM_ICONS)}!", parse_mode="HTML")
     else:
-        await msg.reply_text(f"Da co roi! Tong {len(PREMIUM_ICONS)} icon roi My oi! Go /xemicon de xem", parse_mode="HTML")
+        await msg.reply_text(f"Da co roi! Tong {len(PREMIUM_ICONS)} icon! Go /xemicon", parse_mode="HTML")
 
-# FIX: Bo check ADMIN_ID, ai go cung tra loi
 async def xem_all_icon(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print(f"Co nguoi go xemicon: {update.effective_user.id}")
+    # BO CHAN ADMIN - AI GO CUNG DUOC
+    print(f"Xemicon tu {update.effective_user.id}")
     if not PREMIUM_ICONS:
-        await update.message.reply_text("Chua co icon nao! My gui icon premium vao chat rieng voi bot di!")
+        await update.message.reply_text("Chua co icon nao!")
         return
     lines = []
     for k, v in list(PREMIUM_ICONS.items())[:20]:
-        lines.append(f"{pe_by_id(v, '>')} {k} : {v}")
+        lines.append(f"{pe_by_id(v, '>')} {k}: {v}")
     txt = f"Co {len(PREMIUM_ICONS)} icon (hien 20 dau):\n" + "\n".join(lines)
     await update.message.reply_text(txt, parse_mode="HTML")
 
 async def test_icon_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print(f"Co nguoi go testicon: {update.effective_user.id}")
     if not PREMIUM_ICONS:
-        await update.message.reply_text("Chua co icon! Gui icon premium vao chat rieng truoc!")
+        await update.message.reply_text("Chua co icon!")
         return
     ids = list(PREMIUM_ICONS.values())[:5]
-    txt = "Test 5 icon dau:\n"
+    txt = "Test 5 icon:\n"
     for eid in ids:
         txt += pe_by_id(eid, "✨") + " "
-    txt += "\nNeu thay 5 icon lap lanh la OK! Tong: " + str(len(PREMIUM_ICONS))
+    txt += f"\nTong: {len(PREMIUM_ICONS)}"
     await update.message.reply_text(txt, parse_mode="HTML")
 
+async def lay_id_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not os.path.exists(PREMIUM_FILE):
+        await update.message.reply_text("Chua co file json!")
+        return
+    with open(PREMIUM_FILE, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    await update.message.reply_document(document=open(PREMIUM_FILE, "rb"), filename=f"premium_icons_{len(data)}.json", caption=f"Tong {len(data)} icon")
+    with open("all_ids.txt","w",encoding="utf-8") as out:
+        for k,v in data.items():
+            out.write(f"{k}: {v}\n")
+    await update.message.reply_document(document=open("all_ids.txt","rb"), filename="all_ids.txt")
+
+async def my_id_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    chat_id = update.effective_chat.id
+    await update.message.reply_text(f"ID cua My la: {uid}\nChat ID: {chat_id}\nAdmin ID trong code: {ADMIN_ID}\nIcon: {len(PREMIUM_ICONS)}\nMy dang chat o: {update.effective_chat.type}")
+
 def ensure_logo():
-    if not os.path.exists(LOGO_PATH) and LOGO_B64:
-        try:
-            with open(LOGO_PATH, "wb") as f:
-                f.write(base64.b64decode(LOGO_B64))
-        except:
-            pass
+    pass
 
 def get_keyboard(bot_username=None):
-    if bot_username:
-        link = "https://t.me/" + bot_username + "?start=thongke"
-    else:
-        link = PRIVATE_GROUP_LINK
-    return InlineKeyboardMarkup([[InlineKeyboardButton("Vao Nhom Kin BCR", url=link)], [InlineKeyboardButton("Quay Thuong", callback_data="quay_thuong")]])
+    link = "https://t.me/" + bot_username + "?start=thongke" if bot_username else PRIVATE_GROUP_LINK
+    return InlineKeyboardMarkup([[InlineKeyboardButton("Vao Nhom Kin BCR", url=link)]])
 
 def add_logo(path):
-    try:
-        from PIL import Image
-        if not os.path.exists(LOGO_PATH) or not os.path.exists(path):
-            return
-        base = Image.open(path).convert("RGBA")
-        logo = Image.open(LOGO_PATH).convert("RGBA")
-        w, h = base.size
-        logo.thumbnail((w//5, h//5))
-        base.paste(logo, (w - logo.width - 10, h - logo.height - 10), logo)
-        base.convert("RGB").save(path)
-    except:
-        pass
+    pass
 
 def get_bai(loai):
     try:
@@ -191,9 +164,7 @@ def get_bai(loai):
             cap = auto_premium_caption(f"Bai {idx} BCR VIP")
         if os.path.exists(jpg):
             return jpg, cap
-        else:
-            print(f"Khong tim thay file {jpg}")
-            return None, cap
+        return None, cap
     except Exception as e:
         print(f"Loi get_bai: {e}")
         return None, None
@@ -202,17 +173,13 @@ async def dang_bai_20h(context):
     try:
         jpg, cap = get_bai("kenh")
         if not jpg:
-            print("Khong co bai kenh de dang")
-            # Thu dang file mac dinh
             if os.path.exists(IMAGE_PATH):
                 with open(IMAGE_PATH, "rb") as f:
-                    await context.bot.send_photo(chat_id=CHANNEL_ID, photo=f, caption=auto_premium_caption("Test bai Kênh"), parse_mode="HTML")
-                return
+                    await context.bot.send_photo(chat_id=CHANNEL_ID, photo=f, caption=auto_premium_caption("Test Kênh"), parse_mode="HTML")
             return
         cap = auto_premium_caption(cap)
         with open(jpg, "rb") as f:
             await context.bot.send_photo(chat_id=CHANNEL_ID, photo=f, caption=cap, parse_mode="HTML")
-        print(f"Da dang kenh: {jpg}")
     except Exception as e:
         print(f"Loi dang kenh: {e}")
 
@@ -220,64 +187,20 @@ async def dang_bai_nhom_kin_20h(context):
     try:
         jpg, cap = get_bai("nhom_kin")
         if not jpg:
-            print("Khong co bai nhom kin de dang")
             return
         cap = auto_premium_caption(cap)
         with open(jpg, "rb") as f:
             await context.bot.send_photo(chat_id=GROUP_ID, photo=f, caption=cap, parse_mode="HTML")
-        print(f"Da dang nhom kin: {jpg}")
     except Exception as e:
         print(f"Loi dang nhom kin: {e}")
 
 async def bao_cao_cuoi_ngay(context):
-    try:
-        await context.bot.send_message(chat_id=ADMIN_ID, text=f"Bao cao: {check_lich()}\nIcon: {len(PREMIUM_ICONS)}")
-    except:
-        pass
+    pass
 
 async def start_command(u, c):
-    await u.message.reply_text("Bot BCR VIP dang chay! Icon: " + str(len(PREMIUM_ICONS)))
-
-async def chao_thanh_vien_moi(u, c):
-    try:
-        if u.chat_member.new_chat_member.status == ChatMemberStatus.MEMBER:
-            uid = u.chat_member.new_chat_member.user.id
-            inv = u.chat_member.invite_link
-            if inv and inv.creator:
-                inviter = inv.creator.id
-                invite_data[inviter] = invite_data.get(inviter, 0) + 1
-            await c.bot.send_message(chat_id=u.effective_chat.id, text="Chao mung!", reply_markup=get_keyboard(c.bot.username))
-    except:
-        pass
-
-async def auto_reply_tu_dong(u, c):
-    if u.effective_chat.id != GROUP_ID:
-        return
-    if any(k in (u.message.text or "").lower() for k in ["bet", "cau", "chot", "bcr", "bai"]):
-        await u.message.reply_text("Phan tich o nhom rieng roi nha!", reply_markup=get_keyboard(c.bot.username))
-
-async def ban_command(u, c):
-    if not c.args:
-        await u.message.reply_text("Dung: /ban <user_id>")
-        return
-    try:
-        uid = int(c.args[0])
-        await c.bot.ban_chat_member(chat_id=GROUP_ID, user_id=uid)
-        await u.message.reply_text("Da ban " + str(uid))
-    except Exception as e:
-        await u.message.reply_text("Loi: " + str(e))
-
-async def top_command(u, c):
-    if not invite_data:
-        await u.message.reply_text("Chua co ai moi!")
-        return
-    top = sorted(invite_data.items(), key=lambda x: x[1], reverse=True)[:10]
-    await u.message.reply_text("TOP:\n" + "\n".join(["- ID " + str(uid) + ": " + str(cnt) for uid, cnt in top]))
+    await u.message.reply_text(f"Bot chay! ID My: {u.effective_user.id} | Icon: {len(PREMIUM_ICONS)}\nLenh: /xemicon /testicon /layid /myid /xem_lich /testdangbai")
 
 async def nhan_anh_moi(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID:
-        # Cho phep admin 8632660546 va nguoi go lenh xem_lich cung duoc up anh
-        print(f"Nguoi la up anh: {update.effective_user.id}")
     os.makedirs(KENH_FOLDER, exist_ok=True)
     os.makedirs(NHOM_KIN_FOLDER, exist_ok=True)
     caption_html = caption_to_html(update.message)
@@ -290,39 +213,34 @@ async def nhan_anh_moi(update: Update, context: ContextTypes.DEFAULT_TYPE):
             cap_path = os.path.join(folder, "bai_" + str(i) + ".txt")
             f = await update.message.photo[-1].get_file()
             await f.download_to_drive(path)
-            add_logo(path)
             if caption_html.strip():
                 with open(cap_path, "w", encoding="utf-8") as cf:
                     cf.write(caption_html.strip())
-            print(f"Da luu {loai} bai_{i} caption: {caption_html[:200]}")
-            await update.message.reply_text("Da luu " + loai.upper() + " bai_" + str(i) + f"\nCaption: {caption_html[:100]}", reply_markup=get_keyboard(context.bot.username), parse_mode="HTML")
+            await update.message.reply_text("Da luu " + loai.upper() + " bai_" + str(i), reply_markup=get_keyboard(context.bot.username), parse_mode="HTML")
             return
     f = await update.message.photo[-1].get_file()
     await f.download_to_drive(IMAGE_PATH)
     if caption_html.strip():
         with open("caption.txt", "w", encoding="utf-8") as cf:
             cf.write(caption_html.strip())
-    add_logo(IMAGE_PATH)
-    await update.message.reply_text(f"OK My! Da luu! Caption: {caption_html[:100]}", reply_markup=get_keyboard(context.bot.username), parse_mode="HTML")
+    await update.message.reply_text(f"OK My! Da luu!", reply_markup=get_keyboard(context.bot.username), parse_mode="HTML")
 
 async def test_dang_bai_command(u, c):
-    print(f"Co nguoi go testdangbai: {u.effective_user.id}")
-    await u.message.reply_text(f"Dang test dang bai... Icon: {len(PREMIUM_ICONS)}")
+    await u.message.reply_text(f"Dang test... Icon: {len(PREMIUM_ICONS)}")
     try:
         await dang_bai_20h(c)
         await asyncio.sleep(2)
         await dang_bai_nhom_kin_20h(c)
-        await u.message.reply_text("Test xong! 2 bai khac nhau! Kiem tra Kênh xem co icon lap lanh chua? Neu khong thay bai, go /xem_lich")
+        await u.message.reply_text("Test xong! Kiem tra Kênh")
     except Exception as e:
-        await u.message.reply_text("Loi test dang bai: " + str(e))
-        print(f"Loi test: {e}")
+        await u.message.reply_text("Loi: " + str(e))
 
 def check_lich():
     lines = []
     for i in range(1, 8):
         k = "OK" if os.path.exists(os.path.join(KENH_FOLDER, "bai_" + str(i) + ".jpg")) else "NO"
         n = "OK" if os.path.exists(os.path.join(NHOM_KIN_FOLDER, "bai_" + str(i) + ".jpg")) else "NO"
-        lines.append("Ngay " + str(i) + ": Kenh " + k + " | Nhom kin " + n)
+        lines.append(f"Ngay {i}: Kenh {k} | Nhom kin {n}")
     if os.path.exists(LICH_FILE):
         try:
             with open(LICH_FILE, "r") as f:
@@ -336,7 +254,6 @@ def check_lich():
     return "\n".join(lines)
 
 async def setup_lich_command(u, c):
-    print(f"Co nguoi go setup_lich: {u.effective_user.id}")
     os.makedirs(KENH_FOLDER, exist_ok=True)
     os.makedirs(NHOM_KIN_FOLDER, exist_ok=True)
     with open(LICH_FILE, "w", encoding="utf-8") as f:
@@ -344,38 +261,24 @@ async def setup_lich_command(u, c):
     await u.message.reply_text("LICH DA SETUP:\n" + check_lich())
 
 async def xem_lich_command(u, c):
-    print(f"Co nguoi go xem_lich: {u.effective_user.id}")
     await u.message.reply_text("LICH:\n" + check_lich())
-
-async def quay_thuong(u, c):
-    q = u.callback_query
-    await q.answer()
-    await q.edit_message_text("Chuc mung! Vao nhom kin de nhan thuong:", reply_markup=get_keyboard(c.bot.username))
 
 async def post_init(application):
     try:
         await application.bot.delete_webhook(drop_pending_updates=True)
-        print("Da xoa webhook cu - tranh Conflict!")
-    except Exception as e:
-        print(f"Khong xoa webhook: {e}")
+    except:
+        pass
 
 async def error_handler(update, context):
-    if isinstance(context.error, Conflict):
-        print("Conflict - dang co 2 bot chay, doi 10s...")
-        await asyncio.sleep(10)
-        return
     print(f"Loi: {context.error}")
 
 def main():
-    ensure_logo()
     for fd in [KENH_FOLDER, NHOM_KIN_FOLDER, SCHEDULE_FOLDER]:
         os.makedirs(fd, exist_ok=True)
-    
     app = Application.builder().token(BOT_TOKEN).post_init(post_init).build()
-    
     app.add_handler(CommandHandler("start", start_command))
-    app.add_handler(CommandHandler("ban", ban_command))
-    app.add_handler(CommandHandler("top", top_command))
+    app.add_handler(CommandHandler("myid", my_id_command))
+    app.add_handler(CommandHandler("my_id", my_id_command))
     app.add_handler(CommandHandler("setup_lich", setup_lich_command))
     app.add_handler(CommandHandler("xem_lich", xem_lich_command))
     app.add_handler(CommandHandler("xemlich", xem_lich_command))
@@ -384,20 +287,16 @@ def main():
     app.add_handler(CommandHandler("xem_icon", xem_all_icon))
     app.add_handler(CommandHandler("testicon", test_icon_command))
     app.add_handler(CommandHandler("test_icon", test_icon_command))
-    app.add_handler(CallbackQueryHandler(quay_thuong, pattern="quay_thuong"))
-    app.add_handler(ChatMemberHandler(chao_thanh_vien_moi, ChatMemberHandler.CHAT_MEMBER))
-    # FIX: Bo filter ADMIN_ID de ai cung test duoc
+    app.add_handler(CommandHandler("layid", lay_id_command))
+    app.add_handler(CommandHandler("lay_id", lay_id_command))
+    app.add_handler(CommandHandler("exporticon", lay_id_command))
     app.add_handler(MessageHandler(filters.TEXT & filters.ChatType.PRIVATE, bat_nhieu_icon))
     app.add_handler(MessageHandler(filters.PHOTO, nhan_anh_moi))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.GROUPS, auto_reply_tu_dong))
     app.add_error_handler(error_handler)
-    
     if app.job_queue:
         app.job_queue.run_daily(dang_bai_20h, time=time(hour=13, minute=0, second=0))
         app.job_queue.run_daily(dang_bai_nhom_kin_20h, time=time(hour=13, minute=5, second=0))
-        app.job_queue.run_daily(bao_cao_cuoi_ngay, time=time(hour=16, minute=0, second=0))
-    
-    print(f"Bot BCR - FIX XEMICON - Da load {len(PREMIUM_ICONS)} icon - Dang chay!")
+    print(f"Bot FIX ADMIN - {len(PREMIUM_ICONS)} icon")
     app.run_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
