@@ -1,6 +1,7 @@
-import os, json, logging, glob
+import os, json, logging, glob, asyncio, time
 from telegram import Update, MessageEntity
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
+from telegram.error import Conflict
 
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 FILE_ICON = "premium_icons.json"
@@ -26,7 +27,6 @@ def save_icons():
 # --- LICH ---
 def load_lich():
     all_match = []
-    # 1. Doc file lich_thi_dau.json goc
     if os.path.exists(LICH_FILE):
         try:
             with open(LICH_FILE, "r", encoding="utf-8") as f:
@@ -37,7 +37,6 @@ def load_lich():
                     all_match.append(data)
         except Exception as e:
             logging.error(f"Loi doc {LICH_FILE}: {e}")
-    # 2. Doc tat ca file json trong thu muc lichthidau/
     if os.path.exists(SCHEDULE_FOLDER):
         for jf in glob.glob(os.path.join(SCHEDULE_FOLDER, "*.json")):
             try:
@@ -52,48 +51,36 @@ def load_lich():
     return all_match
 
 async def start(update: Update, context):
-    await update.message.reply_text(f"✅ Bot BCR dang chay!\n💎 {len(icons)} icon\n📅 /lich de xem lich\n💾 /layid de lay file icon")
+    await update.message.reply_text(f"Bot BCR gon gang dang chay!\nCo {len(icons)} icon - Go /lich de xem lich")
 
 async def xemicon(update: Update, context):
     try:
         if not icons:
-            await update.message.reply_text("⚠️ Chua co icon! Gui icon premium vao group de bot hoc!")
+            await update.message.reply_text("Chua co icon! Gui icon premium vao group di My!")
             return
         list_ids = list(icons.values())[:5]
         text = "  " * len(list_ids)
         entities = [MessageEntity(type=MessageEntity.CUSTOM_EMOJI, offset=i*2, length=2, custom_emoji_id=str(cid)) for i, cid in enumerate(list_ids)]
         await update.message.reply_text(f"Test {len(icons)} icon:\n{text}", entities=entities)
     except Exception as e:
-        await update.message.reply_text(f"Loi: {e}")
+        await update.message.reply_text(f"Loi xemicon: {e}")
 
 async def layid(update: Update, context):
     save_icons()
     if os.path.exists(FILE_ICON) and icons:
         await update.message.reply_document(open(FILE_ICON, "rb"), caption=f"Tong {len(icons)} icon")
     else:
-        await update.message.reply_text("Chua co file icon, gui icon premium vao group truoc nha!")
+        await update.message.reply_text("Chua co file icon!")
 
 async def lich(update: Update, context):
     data = load_lich()
     if not data:
-        msg = "📅 CHƯA CÓ LỊCH THI ĐẤU\n\n"
-        msg += "My làm vầy để setup:\n"
-        msg += "1. Vô Github repo yunyang094/bot-bcr\n"
-        msg += "2. Tạo file tên `lich_thi_dau.json` ở thư mục gốc\n"
-        msg += "3. Dán nội dung theo mẫu:\n"
-        msg += '[\n  {"giai":"Ngoai Hang Anh","gio":"22:00 - 03/09","kenh":"K+PM","tran":"Man City vs Arsenal"}\n]\n\n'
-        msg += f"Debug: Tim thay file {LICH_FILE}={os.path.exists(LICH_FILE)}, folder {SCHEDULE_FOLDER}={os.path.exists(SCHEDULE_FOLDER)}"
-        await update.message.reply_text(msg)
+        await update.message.reply_text("Chua co lich! Tao file lich_thi_dau.json tren Github di My!")
         return
-    
-    msg = "📅 LỊCH THI ĐẤU HÔM NAY\n\n"
-    for i, item in enumerate(data[:30], 1):
+    msg = "Lich thi dau:\n\n"
+    for i, item in enumerate(data[:20], 1):
         if isinstance(item, dict):
-            giai = item.get('giai','')
-            gio = item.get('gio','')
-            tran = item.get('tran', item.get('doi',''))
-            kenh = item.get('kenh','')
-            msg += f"{i}. [{giai}] {tran}\n   ⏰ {gio} | 📺 {kenh}\n\n"
+            msg += f"{i}. {item.get('tran','')} - {item.get('gio','')} - {item.get('kenh','')}\n"
         else:
             msg += f"{i}. {item}\n"
     await update.message.reply_text(msg[:4000])
@@ -114,22 +101,43 @@ async def handle_premium(update: Update, context):
         save_icons()
 
 async def post_init(application: Application):
-    await application.bot.delete_webhook(drop_pending_updates=True)
-    print("Bot BCR full lich + icon - started")
+    # Xoa webhook cu moi lan start - chong xung dot
+    try:
+        await application.bot.delete_webhook(drop_pending_updates=True)
+        print("Da xoa webhook - chong xung dot!")
+    except:
+        pass
 
 def main():
     if not BOT_TOKEN:
         print("THIEU BOT_TOKEN!")
         return
-    app = Application.builder().token(BOT_TOKEN).post_init(post_init).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("xemicon", xemicon))
-    app.add_handler(CommandHandler("layid", layid))
-    app.add_handler(CommandHandler("lay_id_icon", layid))
-    app.add_handler(CommandHandler("lich", lich))
-    app.add_handler(CommandHandler("lichthidau", lich))
-    app.add_handler(MessageHandler(filters.Entity(MessageEntity.CUSTOM_EMOJI), handle_premium))
-    app.run_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)
+    
+    # VONG LAP CHONG XUNG DOT - Neu bi Conflict thi ngu 15s roi chay lai, khong crash
+    while True:
+        try:
+            print("Dang khoi dong bot BCR gon gang...")
+            app = Application.builder().token(BOT_TOKEN).post_init(post_init).build()
+            app.add_handler(CommandHandler("start", start))
+            app.add_handler(CommandHandler("xemicon", xemicon))
+            app.add_handler(CommandHandler("layid", layid))
+            app.add_handler(CommandHandler("lay_id_icon", layid))
+            app.add_handler(CommandHandler("lich", lich))
+            app.add_handler(CommandHandler("lichthidau", lich))
+            app.add_handler(MessageHandler(filters.Entity(MessageEntity.CUSTOM_EMOJI), handle_premium))
+            
+            print("Bot chay polling - se tu dong xu ly neu bi Conflict")
+            app.run_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES, close_loop=False)
+            
+        except Conflict as e:
+            print(f"Bi Conflict (Render dang doi ca) - Ngu 15s roi chay lai... {e}")
+            time.sleep(15)
+            continue
+        except Exception as e:
+            print(f"Loi khac: {e} - Ngu 10s roi chay lai...")
+            time.sleep(10)
+            continue
+        break
 
 if __name__ == "__main__":
     main()
