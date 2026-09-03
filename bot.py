@@ -286,6 +286,14 @@ async def job_20h(context: ContextTypes.DEFAULT_TYPE):
         logging.error(f"Lỗi đăng: {e}")
 
 def main():
+    import asyncio
+    # Fix cho Python 3.12+ / 3.14 trên Render - tạo event loop nếu chưa có
+    try:
+        asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    
     if not os.getenv("BOT_TOKEN"):
         print("THIEU BOT_TOKEN!")
         return
@@ -301,9 +309,8 @@ def main():
     app.add_handler(MessageHandler(filters.ALL & ~filters.StatusUpdate.NEW_CHAT_MEMBERS, antispam))
     # 20:00 VN = 13:00 UTC
     app.job_queue.run_daily(job_20h, time=time(hour=13, minute=0), name="20h")
-    print("BOT GỌN 1 FILE ĐANG CHẠY - My gửi tài liệu trực tiếp cho bot nhé!")
-    app.run_polling()
+    print("BOT GON 1 FILE DANG CHAY - My gui tai lieu truc tiep cho bot nhe!")
+    app.run_polling(drop_pending_updates=True, allowed_updates=None)
 
 if __name__=="__main__":
     main()
-
